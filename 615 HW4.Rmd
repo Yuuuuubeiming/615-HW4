@@ -1,0 +1,178 @@
+---
+title: "615 HW4"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+1. Downloading the data
+```{r}
+library(data.table)
+file_root <- "https://www.ndbc.noaa.gov/view_text_file.php?filename=44013h"
+year <- "2023"
+tail <- ".txt.gz&dir=data/historical/stdmet/"
+all_years_data <- list()
+for (year in 1985:2023) {
+  path <- paste0(file_root, year, tail)
+  print(paste("Downloading and reading data for year:", year))
+  try({
+    header <- scan(path, what = 'character', nlines = 1, quiet = TRUE)
+    buoy <- fread(path, header = FALSE, skip = 2)
+    colnames(buoy) <- header
+    buoy[, Year := year]
+    all_years_data[[as.character(year)]] <- buoy
+  }, silent = TRUE)
+}
+combined_data <- rbindlist(all_years_data, use.names = TRUE, fill = TRUE)
+head(combined_data)
+```
+2.Changing the 999 and 99 to NA, since I found some data cannot be 99 so many times.
+```{r}
+head(combined_data)
+missing_columns <- c("WVHT", "DPD", "APD", "MWD", "DEWP", "VIS")
+for (col in missing_columns) {
+  combined_data[[col]][combined_data[[col]] == 999] <- NA
+}
+for (col in missing_columns) {
+  combined_data[[col]][combined_data[[col]] == 99] <- NA
+}
+head(combined_data)
+
+library(naniar)
+gg_miss_var(combined_data, show_pct = TRUE)
+missing_by_year <- combined_data[, lapply(.SD, function(x) sum(is.na(x))), by = Year]
+print(missing_by_year)
+
+library(ggplot2)
+ggplot(missing_by_year, aes(x = Year)) +
+  geom_line(aes(y = WDIR, color = "WDIR")) + 
+  geom_line(aes(y = WSPD, color = "WSPD")) + 
+  labs(y = "Number of Missing Values", x = "Year", title = "Missing Data Patterns by Year") +
+  theme_minimal()
+
+#Changing 99 or 999 is not always right since there may be some extreme condition which drive the value to 99 or 999.
+#The pattern is that most of the missing value will be detected when time passed, and the most possible reason is the development of the detectors technology.
+
+```
+
+3. To showing the climate change, I prefer to use the water temperature(WTMP),
+the air temperature(ATMP), the wind speed(WSPD), the biometric pressure(BAR), 
+Wave height(WVHT), Average Wave period(APD), Visibility(VIS).
+I will first calculate the yearly average value of these factors and create a linear rgression line for them to show the transformation clearly.
+Also, I use a line graph to show the changes.
+```{r}
+library(ggplot2)
+library(dplyr)
+yearly_trends <- combined_data %>%
+  group_by(Year) %>%
+  summarise(
+    avg_ATMP = mean(ATMP, na.rm = TRUE),
+    avg_WTMP = mean(WTMP, na.rm = TRUE),
+    avg_PRES = mean(PRES, na.rm = TRUE),
+    avg_WSPD = mean(WSPD, na.rm = TRUE),
+    avg_BAR = mean(BAR, na.rm = TRUE),
+    avg_VIS = mean(VIS, na.rm = TRUE),
+    avg_WVHT = mean(WVHT, na.rm = TRUE),
+    avg_APD = mean(APD, na.rm = TRUE)
+  )
+
+ggplot(yearly_trends, aes(x = Year, y = avg_ATMP)) +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "ATMP Over Time", 
+       x = "Year", 
+       y = "ATMP") +
+  theme_minimal()
+
+ggplot(yearly_trends, aes(x = Year, y = avg_WTMP)) +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "WTMP Over Time", 
+       x = "Year", 
+       y = "WTMP") +
+  theme_minimal()
+
+ggplot(yearly_trends, aes(x = Year, y = avg_PRES)) +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "PRES Over Time", 
+       x = "Year", 
+       y = "PRES") +
+  theme_minimal()
+
+ggplot(yearly_trends, aes(x = Year, y = avg_WSPD)) +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "WSPD Over Time", 
+       x = "Year", 
+       y = "WSPD") +
+  theme_minimal()
+
+ggplot(yearly_trends, aes(x = Year, y = avg_BAR)) +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "BAR Over Time", 
+       x = "Year", 
+       y = "BAR") +
+  theme_minimal()
+
+ggplot(yearly_trends, aes(x = Year, y = avg_VIS)) +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "VIS Over Time", 
+       x = "Year", 
+       y = "VIS") +
+  theme_minimal()
+
+ggplot(yearly_trends, aes(x = Year, y = avg_WVHT)) +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "WVHT Over Time", 
+       x = "Year", 
+       y = "WVHT") +
+  theme_minimal()
+
+ggplot(yearly_trends, aes(x = Year, y = avg_APD)) +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "APD Over Time", 
+       x = "Year", 
+       y = "APD") +
+  theme_minimal()
+
+```
+4.
+The first bracket will answer two  first two steps, summary the rainfall data and make a visualization of yealy data.
+```{r}
+raindata <- read.csv("RainFall.csv")
+head(raindata)
+#Calculating the yearly data of rainfall and make a visualization.
+
+raindata <- raindata %>%
+  mutate(DATE = as.POSIXct(DATE, format = "%Y%m%d %H:%M"),
+         Year = as.numeric(format(DATE, "%Y")))
+
+yearly_rainfall <- raindata %>%
+  group_by(Year) %>%
+  summarise(total_rainfall = sum(HPCP, na.rm = TRUE)) %>%
+  arrange(Year)
+
+ggplot(yearly_rainfall, aes(x = Year, y = total_rainfall)) +
+  geom_point()+
+  geom_line()+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+summary(yearly_rainfall)
+```
+
+The second bracket will create a simple model
+```{r}
+head(combined_data)
+yearly_data <- merge(yearly_rainfall, yearly_trends, by = "Year")
+simple_model <- lm(total_rainfall ~ avg_ATMP + avg_WSPD + avg_PRES + avg_WVHT+avg_APD, data = yearly_data)
+summary(simple_model)
+```
+
