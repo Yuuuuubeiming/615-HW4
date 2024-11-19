@@ -1,0 +1,35 @@
+name: Render R Markdown
+
+on:
+  push:
+    paths:
+      - '**.Rmd'
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.3'
+      
+      - uses: r-lib/actions/setup-renv@v2
+      
+      - name: Install dependencies
+        run: |
+          R -e 'install.packages(c("rmarkdown", "knitr"))'
+      
+      - name: Render Rmarkdown files
+        run: |
+          Rscript -e 'tryCatch({lapply(list.files(pattern = "\\.Rmd$", recursive = TRUE), rmarkdown::render)}, error = function(e) {cat("Error: ", e$message, "\n")})'
+      
+      - name: Commit results
+        run: |
+          git config --local user.name "$GITHUB_ACTOR"
+          git config --local user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          git add *.html
+          git commit -m 'Render Rmarkdown files' || echo "No changes to commit"
+          git push
